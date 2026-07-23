@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.gradio/
+vector_db/*
+!vector_db/.gitkeep
