@@ -1,8 +1,17 @@
 faiss-cpu>=1.8.0,<2
 gradio>=5.0.0,<7
 langchain>=0.3.0,<2
+langchain-community>=0.0.20,<2
+langchain-huggingface>=0.0.1,<2
+langchain-groq>=0.1.0,<2
 pypdf>=5.0.0,<7
 python-dotenv>=1.0.0,<2
 sentence-transformers>=3.0.0,<6
 torch>=2.2.0
 transformers>=4.45.0,<6
+accelerate>=0.27.0   # For iintelligently distributing llm models across available devices and device mapping
+bitsandbytes>=0.42.0 # For bit quantization
+bs4
+unstructured
+
+

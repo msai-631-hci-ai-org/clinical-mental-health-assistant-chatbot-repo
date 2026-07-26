@@ -8,5 +8,5 @@ venv/
 .coverage
 htmlcov/
 .gradio/
-vector_db/*
-!vector_db/.gitkeep
+.github/
+.vscode/

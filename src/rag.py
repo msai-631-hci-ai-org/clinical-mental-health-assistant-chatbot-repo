@@ -1,136 +1,131 @@
-"""Safety-first retrieval-augmented response pipeline."""
+import os
+import torch
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
+from langchain_classic.chains import create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_groq import ChatGroq
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
+from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+from src.safety import check_crisis_intent, CRISIS_RESPONSE
+from dotenv import load_dotenv
+load_dotenv() #load environment variables to use implicitly
 
-from __future__ import annotations
+FAISS_SAVE_PATH = "./vector_db"
 
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Any
-
-from src.config import Settings
-from src.generator import LocalGenerator
-from src.index import LocalVectorIndex, NoKnowledgeBaseError, SearchResult
-from src.safety import route_for_safety
-
-NO_KNOWLEDGE_BASE_RESPONSE = """
-The local knowledge base is not ready, so I can’t give a source-grounded
-answer. Add trusted PDF, Markdown, or text files to `data/`, then run
-`python -m src.ingest`.
-""".strip()
-
-LOW_CONFIDENCE_RESPONSE = """
-I couldn’t find sufficiently relevant information in the local knowledge base
-to answer that safely. Try rephrasing the question or consult a qualified
-health professional for guidance specific to you.
-""".strip()
-
-
-@dataclass(frozen=True)
-class Answer:
-    """A response plus transparent retrieval metadata."""
-
-    text: str
-    sources: tuple[str, ...] = ()
-    safety_category: str | None = None
-
-    def to_markdown(self) -> str:
-        if not self.sources:
-            return self.text
-        source_lines = "\n".join(f"- `{source}`" for source in self.sources)
-        return f"{self.text}\n\n---\n**Local sources retrieved**\n{source_lines}"
-
-
-class RAGAssistant:
-    """Coordinate deterministic safety, retrieval, and local generation."""
-
-    def __init__(
-        self,
-        settings: Settings,
-        vector_index: LocalVectorIndex | None = None,
-        generator: LocalGenerator | None = None,
-    ):
-        self.settings = settings
-        self.vector_index = vector_index or LocalVectorIndex(settings)
-        self.generator = generator or LocalGenerator(settings)
-
-    def answer(
-        self,
-        question: str,
-        history: Sequence[dict[str, Any]] | None = None,
-    ) -> Answer:
-        clean_question = " ".join(question.split()).strip()
-        safety_route = route_for_safety(clean_question)
-        if safety_route:
-            return Answer(
-                text=safety_route.response,
-                safety_category=safety_route.category,
+def initialize_rag_pipeline():
+    llm = None
+    # Retrieve Groq API Key 
+    if 'GROQ_API_KEY' in os.environ:
+        # Initialize the Groq LLM
+        llm = ChatGroq(
+            api_key=os.environ['GROQ_API_KEY'],
+            model="llama-3.1-8b-instant",
+            temperature=0.2,
+            max_retries=2
             )
+    else: 
+        print("GROQ_API_KEY not found. Defaulting to local HuggingFacePipeline LLM. May require a HF_TOKEN depending on type of gated model")
+        print("WARNING: Local LLMs can be significantly slower and more resource-intensive (especially without GPU) compared to Groq.")
 
-        try:
-            self.vector_index.ensure_current()
-        except NoKnowledgeBaseError:
-            return Answer(text=NO_KNOWLEDGE_BASE_RESPONSE)
+        model_id = "Qwen/Qwen2.5-0.5B-Instruct" # Working model (doesn't require HF_TOKEN) for demonstration
 
-        results = self.vector_index.search(clean_question, self.settings.top_k)
-        relevant = [
-            result
-            for result in results
-            if result.score >= self.settings.min_relevance_score
-        ]
-        if not relevant:
-            return Answer(text=LOW_CONFIDENCE_RESPONSE)
-
-        context = self._format_context(relevant)
-        recent_history = self._format_history(history or ())
-        generated = self.generator.generate(
-            question=clean_question,
-            context=context,
-            history=recent_history,
-        )
-        if not generated:
-            return Answer(text=LOW_CONFIDENCE_RESPONSE)
-
-        return Answer(
-            text=generated,
-            sources=self._source_labels(relevant),
+        # Configure 4-bit quantization for efficient memory usage
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16, # Use bfloat16 for better precision if supported
+            bnb_4bit_use_double_quant=True,
         )
 
-    @staticmethod
-    def _format_context(results: Sequence[SearchResult]) -> str:
-        sections: list[str] = []
-        # Keep retrieved context bounded for responsive laptop-scale models and
-        # leave room for the instructions, question, and recent history.
-        character_budget = 1_200
-        for number, result in enumerate(results, start=1):
-            label = result.source
-            if result.page is not None:
-                label += f", page {result.page}"
-            section = f"[{number}] Source: {label}\n{result.text}"
-            remaining = character_budget - sum(len(item) for item in sections)
-            if remaining <= 0:
-                break
-            sections.append(section[:remaining])
-        return "\n\n".join(sections)
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            quantization_config=bnb_config,
+            device_map="auto" # Automatically map model layers to GPU if available, else CPU
+        )
 
-    def _format_history(self, history: Sequence[dict[str, Any]]) -> str:
-        if self.settings.max_history_messages == 0:
-            return ""
-        lines: list[str] = []
-        for message in history[-self.settings.max_history_messages :]:
-            role = str(message.get("role", "")).lower()
-            content = message.get("content")
-            if role not in {"user", "assistant"} or not isinstance(content, str):
-                continue
-            compact = " ".join(content.split())[:500]
-            lines.append(f"{role}: {compact}")
-        return "\n".join(lines)
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=512, # Limit generated output length
+            max_length=None,
+            temperature=0.2,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            return_full_text=False # Only return the generated text, not the input prompt
+        )
+        llm = HuggingFacePipeline(pipeline=pipe)
+        print(f"Successfully loaded local LLM: {model_id}")
 
-    @staticmethod
-    def _source_labels(results: Sequence[SearchResult]) -> tuple[str, ...]:
-        labels: list[str] = []
-        for result in results:
-            label = result.source
-            if result.page is not None:
-                label += f" (page {result.page})"
-            if label not in labels:
-                labels.append(label)
-        return tuple(labels)
+    if llm is None:
+        # This case should ideally not be reached if one of the paths succeeds
+        raise ValueError("Could not initialize any LLM. Please check your GROQ_API_KEY setup or local model availability.")
+
+    # 1. Load Local Embeddings
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'}
+    )
+
+    # 2. Load FAISS Index
+    vectorstore = FAISS.load_local(
+        FAISS_SAVE_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    
+    # The 'input' variable will be for the user's question, 'context' for retrieved documents.
+    prompt_template_str = """
+    You are an educational Clinical Mental Health Assistant.
+    Answer the user's question using ONLY the provided clinical context below.
+    If the context does not contain enough information to answer, state clearly:
+    "I cannot find this information in my verified clinical documents."
+    Do NOT diagnose, prescribe, or offer formal therapeutic advice.
+
+    Context:
+    {context}
+
+    Question:
+    {input}
+
+    Answer:
+    """
+    # Use ChatPromptTemplate, as it's commonly used with the new chain factories
+    PROMPT = ChatPromptTemplate.from_template(prompt_template_str)
+
+    # Build RAG Chain using create_stuff_documents_chain and create_retrieval_chain
+    document_chain = create_stuff_documents_chain(llm, PROMPT)
+    qa_chain = create_retrieval_chain(retriever, document_chain)
+
+    return qa_chain
+
+# Global Chain Instance
+qa_chain = initialize_rag_pipeline()
+
+def generate_mental_health_response(user_query: str) -> str:
+    # Level 3 Safety Check
+    # NOTE: The check_crisis_intent and CRISIS_RESPONSE are defined in PkCKLiEysMqg
+    # We need to make sure this is imported or accessible.
+    # For this example, let's assume it's imported or globally available.
+    # If not, you might need to add `from safety import check_crisis_intent, CRISIS_RESPONSE` here or similar.
+    if check_crisis_intent(user_query):
+        return CRISIS_RESPONSE
+
+    try:
+        # Level 4 RAG Generation (updated invocation for new chain)
+        response = qa_chain.invoke({"input": user_query})
+        answer = response["answer"] # Output key is typically 'answer' now
+
+        # Optional: Append citations/sources for transparency (HCI benefit)
+        # Source documents are typically in 'context' key with the new chain
+        sources = set([doc.metadata.get("source", "NIMH Guidelines") for doc in response["context"]])
+        source_text = "\n\n---\n*Sources Consulted:* " + ", ".join(sources)
+
+        return answer + source_text
+    except Exception as e:
+        return f"An error occurred while processing your query: {str(e)}"

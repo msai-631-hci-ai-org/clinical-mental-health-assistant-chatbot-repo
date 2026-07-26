@@ -1,9 +1,8 @@
 # Clinical Mental Health Assistant RAG Chatbot
 
 The Clinical Mental Health Assistant (C-MHA) is an educational MSAI 631-B01
-AI/HCI project. It uses retrieval-augmented generation (RAG) to turn a curated,
-local knowledge base into concise conversational answers while showing the
-local sources used.
+AI/HCI project. It uses retrieval-augmented generation (RAG) to turn a curated
+knowledge base into a concise conversational agent that answers users questions while showing clinical sources used.
 
 > **Important:** C-MHA is an experimental educational prototype, not a medical
 > device or a substitute for professional care. It does not diagnose, prescribe,
@@ -11,11 +10,11 @@ local sources used.
 
 ## Screenshots
 
-### Local chat interface
+### Chat interface
 
-![C-MHA local chat interface](docs/images/c-mha-home.png)
+![C-MHA chat interface](docs/images/c-mha-home.png)
 
-### Grounded answer with the retrieved local source
+### Grounded answer with the retrieved source
 
 ![C-MHA grounded RAG answer](docs/images/c-mha-rag-answer.png)
 
@@ -31,8 +30,7 @@ local sources used.
 - **Grounded responses:** normalized Sentence Transformer embeddings and a local
   FAISS index retrieve only from reviewed files in `data/`.
 - **Local generation:** LangChain orchestrates a locally downloaded Hugging Face
-  model. No paid inference API is used; a read-only Hugging Face token
-  authenticates the model downloads.
+  model need be if there is no key or token usage. There is no paid inference API is used in this app.
 - **Empathetic HCI:** Gradio provides a focused chat interface, persistent
   disclaimer, example questions, and visible source labels.
 - **Safety before generation:** recognized high-risk first-person self-harm or
@@ -42,53 +40,85 @@ local sources used.
   does not meet the configured relevance threshold.
 - **Privacy-conscious defaults:** analytics, saved history, and flagging are
   disabled. Message contents are not intentionally logged.
-- **Laptop-friendly:** the default `Qwen2.5-0.5B-Instruct` generator and
-  `all-MiniLM-L6-v2` embedding model run on CPU. Models are downloaded on first
-  use and then read from the local Hugging Face cache.
+- **LLM-LPU:** Utilizes Groq LLM LPU for fast responses. Fallbacks to Hugging Face Local LLM if API KEY isn't in environment.
 - **Transparent ingestion:** PDF page numbers and source filenames are retained;
   a content fingerprint automatically invalidates a stale index.
 
 ## Architecture
 
-```text
-User message
-    |
-    v
-Deterministic safety router ------> urgent-support response
-    |
-    v
-Sentence Transformer query embedding
-    |
-    v
-FAISS similarity search over reviewed local files
-    |
-    +------> insufficient relevance: safe decline
-    |
-    v
-LangChain prompt + local Hugging Face generator
-    |
-    v
-Answer + retrieved local source labels
+### 1. Build Time / Setup Phase (Runs Once)
+
+* **File:** `documents.py`
+* **When it runs:** **Manually executed ONCE** before launching or deploying the app (or executed locally before pushing to Hugging Face).
+* **What it does:** 
+1. Reads all clinical .pdf, .md, or .txt documents from the `./data` folder.
+2. Generates vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`).
+3. Saves the persistent vector database to disk inside a folder named `./vector_db`.
+* **Deployment Note:** Once `documents.py` runs, it produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`). Commit and push `./vector_db` folder to Hugging Face Spaces alongside Python scripts. `documents.py` is meant to be ran once.  
+
+
+### 2. Runtime / Execution Phase (Runs Continuously)
+
+* **Files:** `app.py`, `rag.py`, and `safety.py`
+* **When they run:** `app.py` is Automatically started by Hugging Face Spaces (or for local testing run `app.py` as well) when the Space boots up, and continuously executed whenever a user sends a prompt.
+
+#### **How the Runtime Files Interact:**
+
 ```
+ Hugging Face Space Starts / User Accesses Web Interface
+                           │
+                           ▼
+                       [app.py]
+         Imports modules and builds Gradio UI
+                           │
+  User types: "What are symptoms of anxiety?" & clicks Send
+                           │
+                           ▼
+                  [rag.py]
+  Receives query and initiates response generation
+                           │
+                           ├───► Step 1: Calls [safety.py]
+                           │      Checks if input contains crisis keywords.
+                           │      (If YES: immediately returns crisis support text).
+                           │
+                           └───► Step 2: Executes RAG Retrieval
+                                  Loads persistent ./vector_db index from disk.
+                                  Retrieves top k=3 relevant context chunks.
+                                  Passes query + chunks to Groq LLM API or Local LLM (much slower).
+                                  Returns grounded response back to Gradio UI.
+
+```
+
+### Detailed File Roles at Runtime
+
+| File Name | Role in Hugging Face Space | How it is invoked |
+| --- | --- | --- |
+| **`app.py`** | **Entry Point & UI** | Hugging Face automatically executes `python app.py` on startup to serve the Gradio web interface to users. |
+| **`rag.py`** | **Backend Logic Engine** | `app.py` imports `generate_mental_health_response()` from this file. It initializes the loaded vector store and the Groq LLM connection on app startup or local LLM. |
+| **`safety.py`** | **Guardrail Module** | `rag.py` imports `check_crisis_intent()` from this file to evaluate every incoming prompt before any LLM call or context search occurs. |
+
+---
+
+### Summary of Deployment Steps
+
+1. **Locally:** Put .pdf, .md, or .txt in `./data`, run `python documents.py` creates `./vector_db`.
+2. **Push to Hugging Face Space:** Push `app.py`, `rag.py`, `safety.py`, `requirements.txt`, and the generated `./vector_db` folder to your Hugging Face Space repository.
+3. **Set Environment Variable:** In Hugging Face Space add `GROQ_API_KEY`.
+4. **Launch:** Hugging Face automatically runs `app.py`, making the full RAG chatbot live.
 
 The persisted FAISS binary is paired with JSON metadata rather than a Python
 pickle, avoiding unsafe pickle deserialization.
 
 ## Project structure
 
-```text
+```bash
 C-MHA/
 ├── data/                    # Reviewed knowledge files and starter corpus
 ├── src/
-│   ├── config.py            # Validated environment configuration
 │   ├── documents.py         # PDF/text/Markdown loading and chunking
-│   ├── generator.py         # LangChain + local Hugging Face generation
-│   ├── index.py             # Safe FAISS persistence and retrieval
-│   ├── ingest.py            # Ingestion CLI
 │   ├── rag.py               # End-to-end RAG coordination
 │   └── safety.py            # Model-independent crisis routing
-├── tests/                   # Dependency-light unit tests
-├── vector_db/               # Generated index (ignored by Git)
+├── vector_db/               # Generated index
 ├── app.py                   # Gradio application
 └── requirements.txt
 ```
@@ -98,182 +128,83 @@ C-MHA/
 Python 3.10 or newer is required. Python 3.10-3.12 is recommended for broad ML
 package compatibility.
 
-### Windows PowerShell: complete setup
-
-The commands below avoid PowerShell activation-policy problems by calling the
-virtual environment's Python executable directly.
+### Command Line Setup: complete setup
 
 #### 1. Install the prerequisites
 
-- [Git for Windows](https://git-scm.com/download/win)
-- [Python 3.12](https://www.python.org/downloads/)
+- [Git download](https://git-scm.com/download) (MAC, WINDOWS, LINUX)
+- [Git Bash](https://gitforwindows.org/) (If using windows specifically)
+- [Python 3.10+](https://www.python.org/downloads/)
 - A free [Hugging Face account](https://huggingface.co/join)
+- A free [Groq account](https://groq.com)
 
 Confirm that Git and Python are available:
 
-```powershell
+```bash
 git --version
-py -3.12 --version
+python --version
 ```
 
-#### 2. Clone the repository and select the feature branch
-
-For a new checkout:
-
-```powershell
-Set-Location (Join-Path $env:USERPROFILE "Documents")
+#### 2. Clone the repository
+```bash
 git clone https://github.com/msai-631-hci-ai-org/clinical-mental-health-assistant-chatbot-repo.git
-Set-Location "clinical-mental-health-assistant-chatbot-repo"
-git switch feature/kalirajann
+
+git checkout feature/derrick-enhancements
 ```
 
-For an existing checkout, open PowerShell in the repository and run:
+#### 3. Create a GROQ account and API KEY
 
-```powershell
-git switch feature/kalirajann
+1. Sign in to GROQ.
+2. Open [Settings > Keys](https://console.groq.com/keys).
+3. Select **Create API KEY**.
+4. Give the Key a project-specific name such as `cmha`.
+5. Copy the Key when it is shown. Treat it like a password.
+6. If Key is missed, regenerate and keep for use.
+
+#### 4. For local testing, add the API KEY to `.env`
+
+In project workspace directory, create the local environment file:
+
+```bash
+touch .env
 ```
 
-If Git reports `detected dubious ownership`, trust only this exact repository
-path, then retry the branch command:
+Replace the placeholder with the copied key:
 
-```powershell
-$repo = (Get-Location).Path.Replace("\", "/")
-git config --global --add safe.directory $repo
-git switch feature/kalirajann
+```bash
+GROQ_API_KEY=your_actual_API_KEY
+or
+HF_TOKEN=your_actual_TOKEN
 ```
 
-Do not configure `safe.directory` as `*`.
-
-#### 3. Create a short-path virtual environment
-
-Keeping the environment outside the repository reduces the chance of Windows
-path-length errors:
-
-```powershell
-$venv = Join-Path $env:USERPROFILE "cmha-venv"
-py -3.12 -m venv $venv
-$python = Join-Path $venv "Scripts\python.exe"
-& $python -m pip install --upgrade pip
-& $python -m pip install -r requirements.txt
-& $python -m pip check
-```
-
-`pip check` should print `No broken requirements found.`
-
-#### 4. Create a Hugging Face read token
-
-1. Sign in to Hugging Face.
-2. Open [Settings > Access Tokens](https://huggingface.co/settings/tokens).
-3. Select **Create new token**.
-4. Give the token a project-specific name such as `cmha-local`.
-5. Choose **Read** access. This application only downloads models and does not
-   need write access.
-6. Copy the token when it is shown. Treat it like a password.
-
-#### 5. Add the token to `.env`
-
-Create the local environment file:
-
-```powershell
-Copy-Item .env.example .env
-notepad .env
-```
-
-Replace the placeholder with the copied token:
-
-```dotenv
-HF_TOKEN=hf_your_actual_read_token
-```
-
-Save and close Notepad. Do not add quotes or spaces around the token. The
-repository ignores `.env`; never commit or share that file, paste its contents
-into an issue, or include the token in a screenshot.
-
-Verify that the application can see a token without printing its value:
-
-```powershell
-& $python -c "from src.config import Settings; Settings.from_env(); import os; print('HF_TOKEN configured:', bool(os.getenv('HF_TOKEN')))"
-```
-
-The expected result is `HF_TOKEN configured: True`.
-
-#### 6. Build the local RAG index
+#### 5. Build the RAG index
 
 The starter knowledge base is already under `data/`. Build its FAISS index:
 
-```powershell
-& $python -m src.ingest --force
+```bash
+python documents.py
 ```
 
-The first run downloads the pinned `all-MiniLM-L6-v2` embedding model. A
-successful starter build reports that 6 chunks were indexed under `vector_db/`.
+The first run downloads all .pdf, .md, and .txt files along side urls in code for injesting the model. Produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`)
 
-#### 7. Run the automated checks
+#### 6. Start the application
 
-```powershell
-& $python -m compileall -q app.py src tests
-& $python -m unittest discover -s tests -v
-```
-
-#### 8. Start the application
-
-```powershell
-& $python app.py
+```bash
+python app.py
 ```
 
 Open [http://127.0.0.1:7860](http://127.0.0.1:7860) in a browser. Keep the
-PowerShell window open while using the application. Press `Ctrl+C` in that
-window to stop it.
-
-The first submitted question downloads the pinned
-`Qwen2.5-0.5B-Instruct` generation model. On a CPU-only computer, the initial
-download and first response can take several minutes. Later runs reuse the
-local Hugging Face cache.
-
-#### 9. Run it again later
-
-From the repository directory:
-
-```powershell
-$venv = Join-Path $env:USERPROFILE "cmha-venv"
-$python = Join-Path $venv "Scripts\python.exe"
-& $python app.py
-```
-
-Re-run `& $python -m src.ingest --force` after adding or editing knowledge files
-under `data/`.
-
-### macOS or Linux
-
-```bash
-git clone https://github.com/msai-631-hci-ai-org/clinical-mental-health-assistant-chatbot-repo.git
-cd clinical-mental-health-assistant-chatbot-repo
-git switch feature/kalirajann
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
-# Edit .env and add a read-only token after HF_TOKEN=.
-python -m src.ingest --force
-python -m unittest discover -s tests -v
-python app.py
-```
+Terminal window open while using the application. Press `Ctrl+C` to stop it.
 
 ### Local setup troubleshooting
 
 - **`401 Unauthorized` or `403 Forbidden`:** verify that `.env` contains a
-  current read token named exactly `HF_TOKEN`, then stop and restart the app.
-- **Token verification prints `False`:** confirm the file is named `.env`, not
-  `.env.txt`, and that it is in the repository root beside `app.py`.
-- **Windows path-length error:** use the short external environment path shown
-  above, and consider cloning the repository closer to the drive root.
-- **Port 7860 is already in use:** stop the older app process with `Ctrl+C`
+  current read token named exactly `GROQ_API_KEY`, then stop and restart the app.
+- **KEY verification prints `False`:** confirm the file is named `.env`, not
+  `.env.txt` or `.env.example`, and that it is in the repository root beside `app.py`.
+- **`Port 7860` is already in use:** stop the older app process with `Ctrl+C`
   before launching another instance.
-- **Slow first response:** model downloads and CPU generation take time. Watch
-  the PowerShell output and allow the initial downloads to finish.
-- **Knowledge changes are missing:** rebuild with
-  `& $python -m src.ingest --force`, then restart the app.
+- **Cannot access gated repo:** an open-source model may be free to use, but in some cases, seeing an error like this is considered a "gated" model on Hugging Face. This means user will need to explicitly accept its terms of use (usually a license agreement) on the Hugging Face website and generate a `HF_TOKEN=your_actual_token` before download of the local LLM will occur before usage. `transformers` library will be able to authenticate and download the model correctly.
 
 ## Hugging Face Spaces deployment
 
@@ -283,70 +214,15 @@ the shared Space, selecting its visibility, and approving its public release
 are team-owned deployment steps and are not claimed as completed by this
 feature branch.
 
-After the team approves deployment:
+After the team collaborates changes, deployment steps to Hugging Face Spaces are as followed:
 
 1. Create a new Space with the **Gradio** SDK.
 2. Connect or upload this repository and select the intended branch.
-3. In the Space settings, add `HF_TOKEN` as a **Secret**, using a read-only
-   project token. Never place the token in a committed file.
-4. Use CPU Basic or another hardware tier with sufficient RAM for the pinned
-   models.
+3. In the Space settings, add `GROQ_API_KEY` or ,`HF_TOKEN`, if local LLM requires, as a **Secret**, using a read-only project token. Never place the token in a committed file.
+4. Hugging Face Spaces Gradio defaults to `ZeroGPU`.
 5. Confirm the build succeeds, the starter corpus indexes, source labels appear,
    and the deterministic safety prompts pass before sharing the Space URL.
-6. Record the approved Space URL and release-review date in this README.
-
-The app does not require a paid inference endpoint; model inference runs in the
-Space process. The local setup remains the required validation path before a
-cloud release.
-
-## Curate the knowledge base
-
-The included `data/starter_knowledge_base.md` is a small demonstration corpus
-paraphrased from current NIMH, CDC, and 988 Lifeline pages. It is not a complete
-clinical dataset.
-
-1. Add reviewed `.pdf`, `.md`, or `.txt` files under `data/`.
-2. Record the authoritative URL, review date, intended audience, and permission
-   to use each source.
-3. Run `python -m src.ingest --force`.
-4. Validate representative, out-of-scope, adversarial, and crisis prompts with
-   qualified human reviewers before any public deployment.
-
-Never treat arbitrary uploads or model-generated text as trusted clinical
-source material.
-
-## Configuration
-
-Copy `.env.example` to `.env` to override defaults:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `HF_TOKEN` | none | Read-only Hugging Face token used to download models |
-| `CMHA_DATA_DIR` | `data` | Knowledge source directory |
-| `CMHA_INDEX_DIR` | `vector_db` | Generated FAISS/JSON files |
-| `CMHA_EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Embedding model |
-| `CMHA_EMBEDDING_REVISION` | pinned commit | Reviewed embedding-model revision |
-| `CMHA_GENERATION_MODEL` | `Qwen/Qwen2.5-0.5B-Instruct` | Local instruction model |
-| `CMHA_GENERATION_REVISION` | pinned commit | Reviewed generation-model revision |
-| `CMHA_DEVICE` | `-1` | CPU (`-1`) or CUDA device number |
-| `CMHA_TOP_K` | `3` | Maximum retrieved chunks |
-| `CMHA_MIN_RELEVANCE_SCORE` | `0.25` | Minimum cosine similarity |
-| `CMHA_CHUNK_SIZE` | `700` | Approximate chunk characters |
-| `CMHA_CHUNK_OVERLAP` | `100` | Overlapping characters |
-| `CMHA_MAX_HISTORY_MESSAGES` | `4` | Recent messages placed in prompt |
-
-## Test
-
-The core tests deliberately use fakes and the Python standard library, so
-safety and RAG control flow can be checked without downloading ML models:
-
-```bash
-python -m compileall -q app.py src tests
-python -m unittest discover -s tests -v
-```
-
-For a release candidate, also install all dependencies, rebuild the index, open
-the Gradio interface, and complete human safety/usability evaluation.
+6. Record approved Space URL and release-review date in this README.
 
 ## Known limitations and ethical safeguards
 
@@ -355,7 +231,6 @@ the Gradio interface, and complete human safety/usability evaluation.
 - Personal diagnosis and medication-change requests are routed to deterministic
   boundary responses before retrieval or generation.
 - Retrieval relevance does not prove clinical correctness or completeness.
-- Small local language models can still misstate or omit information.
 - The application does not establish the user's location; U.S. 988 information
   is labeled as U.S.-specific and local emergency/crisis services are advised
   elsewhere.

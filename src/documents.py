@@ -1,167 +1,94 @@
-"""Load and chunk trusted local knowledge-base documents."""
+import os
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader, TextLoader, UnstructuredMarkdownLoader, WebBaseLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 
-from __future__ import annotations
+DATA_PATH = "./data"          # Directory containing mental health PDF documents
+FAISS_SAVE_PATH = "./vector_db" # Directory to persist the vector store
 
-import hashlib
-import re
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
-from pathlib import Path
+def create_vector_db():
+    # Create directories if they don't exist
+    os.makedirs(DATA_PATH, exist_ok=True)
+    os.makedirs(FAISS_SAVE_PATH, exist_ok=True)
 
-SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
+    print("1. Loading documents from data directory...")
 
+    # --- Start Debugging Additions ---
+    print(f"Current working directory: {os.getcwd()}")
+    abs_data_path = os.path.abspath(DATA_PATH)
+    print(f"Resolved DATA_PATH: {abs_data_path}")
+    if not os.path.exists(abs_data_path):
+        print(f"Error: The data directory '{abs_data_path}' does not exist.")
+        # return # Cannot proceed if data directory itself is missing, but we want to show URL loading if data dir is empty.
+    else:
+        print(f"Data directory '{abs_data_path}' exists.")
+        try:
+            files_in_data = os.listdir(abs_data_path)
+            if not files_in_data:
+                print(f"Warning: Data directory '{abs_data_path}' is empty.")
+            else:
+                print(f"Files found in '{abs_data_path}': {files_in_data}")
+        except Exception as e:
+            print(f"Error listing contents of '{abs_data_path}': {e}")
+            # return # Cannot proceed if data directory itself is missing, but we want to show URL loading if data dir is empty.
+    # --- End Debugging Additions ---
 
-@dataclass(frozen=True)
-class SourceDocument:
-    """Text extracted from one source unit, such as a PDF page."""
+    documents = []
 
-    text: str
-    source: str
-    page: int | None = None
+    # Load PDFs
+    pdf_loader = DirectoryLoader(DATA_PATH, glob="*.pdf", loader_cls=PyPDFLoader)
+    documents.extend(pdf_loader.load())
 
+    # Load Text files
+    txt_loader = DirectoryLoader(DATA_PATH, glob="*.txt", loader_cls=TextLoader)
+    documents.extend(txt_loader.load())
 
-@dataclass(frozen=True)
-class TextChunk:
-    """A retrieval-ready piece of a source document."""
+    # Load Markdown files
+    md_loader = DirectoryLoader(DATA_PATH, glob="*.md", loader_cls=UnstructuredMarkdownLoader)
+    documents.extend(md_loader.load())
 
-    text: str
-    source: str
-    page: int | None
-    chunk_id: int
+    print(f"Loaded {len(documents)} document pages/files (PDFs, TXT, MD) from local directory.")
 
+    # --- Add URL Loading ---
+    print("Loading documents from URLs...")
+    # Replace with your desired URLs
+    urls = [
+        "https://www.nimh.nih.gov/health/topics/anxiety-disorders",
+        "https://www.nimh.nih.gov/health/topics/depression",
+        "https://www.un.org/en/global-issues/mental-health",
+        "https://www.nimh.nih.gov/health/find-help",
+        "https://www.apa.org/ptsd-guideline/patients-and-families/cognitive-behavioral"
+    ]
+    web_loader = WebBaseLoader(urls)
+    web_documents = web_loader.load()
+    documents.extend(web_documents)
+    print(f"Loaded {len(web_documents)} document pages from URLs.")
+    # -- End URL Loading ---
 
-def discover_source_files(data_dir: Path) -> list[Path]:
-    """Return supported knowledge files in deterministic order."""
+    print(f"Total loaded documents: {len(documents)}.")
 
-    if not data_dir.exists():
-        return []
-    return sorted(
-        (
-            path
-            for path in data_dir.rglob("*")
-            if path.is_file()
-            and path.suffix.lower() in SUPPORTED_EXTENSIONS
-            and not path.name.lower().startswith("readme")
-        ),
-        key=lambda path: path.as_posix().lower(),
+    print("2. Splitting text into clinical chunks...")
+    # Recursive splitting preserves paragraph context
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        separators=["\n\n", "\n", " ", ""]
+    )
+    chunks = text_splitter.split_documents(documents)
+    print(f"Created {len(chunks)} text chunks.")
+
+    print("3. Generating embeddings and building FAISS index...")
+    # Free, local, CPU-friendly embedding model (384 dimensions)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'}
     )
 
+    # Create vector database and persist to disk
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore.save_local(FAISS_SAVE_PATH)
+    print(f"Success! FAISS index saved locally at '{FAISS_SAVE_PATH}'.")
 
-def source_fingerprint(data_dir: Path) -> str:
-    """Hash file paths and bytes so stale indexes can be detected."""
-
-    files = discover_source_files(data_dir)
-    if not files:
-        return ""
-    digest = hashlib.sha256()
-    for path in files:
-        relative = path.relative_to(data_dir).as_posix()
-        digest.update(relative.encode("utf-8"))
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(block)
-    return digest.hexdigest()
-
-
-def load_documents(data_dir: Path) -> list[SourceDocument]:
-    """Extract text from Markdown, text, and PDF knowledge files."""
-
-    documents: list[SourceDocument] = []
-    for path in discover_source_files(data_dir):
-        source = path.relative_to(data_dir).as_posix()
-        if path.suffix.lower() == ".pdf":
-            documents.extend(_load_pdf(path, source))
-        else:
-            text = path.read_text(encoding="utf-8", errors="replace").strip()
-            if text:
-                documents.append(SourceDocument(text=text, source=source))
-    return documents
-
-
-def _load_pdf(path: Path, source: str) -> list[SourceDocument]:
-    try:
-        from pypdf import PdfReader
-    except ImportError as exc:
-        raise RuntimeError(
-            "PDF ingestion requires pypdf. Install requirements.txt first."
-        ) from exc
-
-    pages: list[SourceDocument] = []
-    reader = PdfReader(str(path))
-    for page_number, page in enumerate(reader.pages, start=1):
-        text = (page.extract_text() or "").strip()
-        if text:
-            pages.append(SourceDocument(text=text, source=source, page=page_number))
-    return pages
-
-
-def _normalize_text(text: str) -> str:
-    text = text.replace("\x00", " ")
-    text = re.sub(r"[ \t]+", " ", text)
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
-
-
-def split_text(text: str, chunk_size: int, overlap: int) -> Iterator[str]:
-    """Split text near natural boundaries with deterministic overlap."""
-
-    if chunk_size < 1:
-        raise ValueError("chunk_size must be positive")
-    if overlap < 0 or overlap >= chunk_size:
-        raise ValueError("overlap must be non-negative and smaller than chunk_size")
-
-    normalized = _normalize_text(text)
-    cursor = 0
-    while cursor < len(normalized):
-        end = min(cursor + chunk_size, len(normalized))
-        if end < len(normalized):
-            floor = cursor + chunk_size // 2
-            boundaries = (
-                normalized.rfind("\n\n", floor, end),
-                normalized.rfind(". ", floor, end),
-                normalized.rfind(" ", floor, end),
-            )
-            boundary = max(boundaries)
-            if boundary >= floor:
-                end = boundary + (1 if normalized[boundary] == " " else 0)
-
-        chunk = normalized[cursor:end].strip()
-        if chunk:
-            yield chunk
-        if end >= len(normalized):
-            break
-        next_cursor = max(end - overlap, cursor + 1)
-        if (
-            next_cursor > 0
-            and next_cursor < len(normalized)
-            and not normalized[next_cursor - 1].isspace()
-            and not normalized[next_cursor].isspace()
-        ):
-            next_space = normalized.find(
-                " ",
-                next_cursor,
-                min(next_cursor + 40, len(normalized)),
-            )
-            if next_space != -1:
-                next_cursor = next_space + 1
-        cursor = next_cursor
-
-
-def chunk_documents(
-    documents: Iterable[SourceDocument],
-    chunk_size: int,
-    overlap: int,
-) -> list[TextChunk]:
-    """Convert extracted documents into numbered retrieval chunks."""
-
-    chunks: list[TextChunk] = []
-    for document in documents:
-        for text in split_text(document.text, chunk_size, overlap):
-            chunks.append(
-                TextChunk(
-                    text=text,
-                    source=document.source,
-                    page=document.page,
-                    chunk_id=len(chunks),
-                )
-            )
-    return chunks
+if __name__ == "__main__":
+    create_vector_db()
