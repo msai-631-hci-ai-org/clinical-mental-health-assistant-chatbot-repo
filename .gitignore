@@ -8,5 +8,4 @@ venv/
 .coverage
 htmlcov/
 .gradio/
-.github/
 .vscode/

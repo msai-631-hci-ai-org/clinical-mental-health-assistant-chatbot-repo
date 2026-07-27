@@ -1,0 +1,44 @@
+name: Hugging Face Sync
+
+on:
+  push:
+    branches:
+      - feature/derrick-enhancements
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 1. Matches your exact GitHub Environment name
+    environment: test-environment
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push updates to Hugging Face (Excluding README)
+        env:
+          HF_TOKEN: ${{ secrets.HF_WORKFLOW_TOKEN }}
+        run: |
+          # Configure local runner Git info
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          
+          # Add Hugging Face as a remote repository destination
+          git remote add hf https://DerrickDK777:$HF_TOKEN@huggingface.co/spaces/DerrickDK777/C-MHA-TEST
+          
+          # Fetch Hugging Face's history (ignores error if the Space is brand new/empty)
+          git fetch hf main || true
+          
+          # Check out Hugging Face's README over local runner's copy
+          # If HF has no README yet, it will just skip this step
+          git checkout hf/main -- README.md || echo "No remote README found to preserve"
+          
+          # Commit that specific README adjustment so Git sees it as identical to HF
+          git add README.md
+          git commit -m "Updates to codebase. [skip ci]" || echo "No changes to README"
+          
+          # Push your code updates safely to the Hugging Face main branch
+          git push -f hf HEAD:main
