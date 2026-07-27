@@ -1,4 +1,14 @@
 import os
+HF_DEPLOYMENT = os.getenv("HF_DEPLOYMENT", "false").lower() == "true"
+
+if HF_DEPLOYMENT:
+    import spaces
+else:
+    class FakeSpaces:
+        def GPU(self, fn):
+            # No‑op decorator for local testing
+            return fn
+    spaces = FakeSpaces()
 import torch
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -106,7 +116,7 @@ def initialize_rag_pipeline():
 
 # Global Chain Instance
 qa_chain = initialize_rag_pipeline()
-
+@spaces.GPU
 def generate_mental_health_response(user_query: str) -> str:
     # Level 3 Safety Check
     # NOTE: The check_crisis_intent and CRISIS_RESPONSE are defined in PkCKLiEysMqg

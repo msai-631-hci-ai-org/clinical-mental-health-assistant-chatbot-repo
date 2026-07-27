@@ -172,9 +172,12 @@ touch .env
 Replace the placeholder with the copied key:
 
 ```bash
+# Choose
 GROQ_API_KEY=your_actual_API_KEY
 or
 HF_TOKEN=your_actual_TOKEN
+# MUST include
+HF_DEPLOYMENT=false #set to true for deployment #false for local testing
 ```
 
 #### 5. Build the RAG index

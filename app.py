@@ -14,8 +14,8 @@ DISCLAIMER = """
 
 WELCOME = """
 Ask about general mental-health concepts, self-care, or when professional help
-may be appropriate. Answers arecurated knowledge base and
-show which sources were retrieved.
+may be appropriate. Answers are curated knowledge based and
+show which sources were consulted.
 """
 
 def chat_function(message, history):
@@ -25,7 +25,7 @@ def chat_function(message, history):
 
 # Build Gradio Interface
 with gr.Blocks(title="Clinical Mental Health Assistant") as demo:
-    gr.Markdown("# Clinical Mental Health Assistant (CG-MHA)")
+    gr.Markdown("# Clinical Mental Health Assistant (C-MHA)")
     gr.Markdown(DISCLAIMER)
     gr.Markdown(WELCOME)
 
