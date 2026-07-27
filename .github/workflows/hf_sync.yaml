@@ -8,7 +8,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 1. Matches your exact GitHub Environment name
     environment: test-environment
 
     steps:
@@ -16,29 +15,37 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
+
+      # NEW STEP: Installs official Hugging Face Xet extension on the Ubuntu runner
+      - name: Install Git Xet extension
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://githubusercontent.com | sh
+          echo "/home/runner/.xet/bin" >> $GITHUB_PATH
+          echo "/home/runner/bin" >> $GITHUB_PATH
 
       - name: Push updates to Hugging Face (Excluding README)
         env:
           HF_TOKEN: ${{ secrets.HF_WORKFLOW_TOKEN }}
         run: |
-          # Configure local runner Git info
+          # 1. Initialize Git Xet configuration on the runner
+          git xet install
+          
+          # 2. Configure local runner Git info
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           
-          # Add Hugging Face as a remote repository destination
+          # 3. Add Hugging Face as a remote repository destination
           git remote add hf https://DerrickDK777:$HF_TOKEN@huggingface.co/spaces/DerrickDK777/C-MHA-TEST
           
-          # Fetch Hugging Face's history (ignores error if the Space is brand new/empty)
+          # 4. Fetch Hugging Face's history
           git fetch hf main || true
           
-          # Check out Hugging Face's README over local runner's copy
-          # If HF has no README yet, it will just skip this step
+          # 5. Overwrite local runner README with HF's version
           git checkout hf/main -- README.md || echo "No remote README found to preserve"
           
-          # Commit that specific README adjustment so Git sees it as identical to HF
-          git add README.md
-          git commit -m "Updates to codebase. [skip ci]" || echo "No changes to README"
+          # 6. Re-stage everything so Git Xet intercepts the binary files correctly
+          git add -A
+          git commit -m "Keep Hugging Face README intact and prepare binaries [skip ci]" || echo "No changes to commit"
           
-          # Push your code updates safely to the Hugging Face main branch
+          # 7. Push safely (Git Xet handles the binary files automatically behind the scenes)
           git push -f hf HEAD:main
