@@ -8,6 +8,20 @@ knowledge base into a concise conversational agent that answers users questions 
 > device or a substitute for professional care. It does not diagnose, prescribe,
 > or provide emergency support.
 
+# Table of Contents
+1. [Team Members](#team)
+2. [Screenshots](#screenshots)
+3. [Implementated Requirements](#implemented-requirements)
+4. [Bot Architecture](#architecture)
+5. [Environment Setup/Testing](#run-locally)
+6. [Disclaimer](#disclaimer)
+
+## Team
+- Derrick Kyei
+- Kalirajan Natarajan
+- Obinna Asoluka
+- Stacey Scott
+
 ## Screenshots
 
 ### Chat interface
@@ -17,13 +31,6 @@ knowledge base into a concise conversational agent that answers users questions 
 ### Grounded answer with the retrieved source
 
 ![C-MHA grounded RAG answer](docs/images/c-mha-rag-answer.png)
-
-## Team
-
-- Derrick Kyei
-- Kalirajan Natarajan
-- Obinna Asoluka
-- Stacey Scott
 
 ## Implemented requirements
 
@@ -128,15 +135,13 @@ C-MHA/
 Python 3.10 or newer is required. Python 3.10-3.12 is recommended for broad ML
 package compatibility.
 
-### Command Line Setup: complete setup
-
 #### 1. Install the prerequisites
 
-- [Git download](https://git-scm.com/download) (MAC, WINDOWS, LINUX)
-- [Git Bash](https://gitforwindows.org/) (If using windows specifically)
-- [Python 3.10+](https://www.python.org/downloads/)
-- A free [Hugging Face account](https://huggingface.co/join)
-- A free [Groq account](https://groq.com)
+- [Git](https://git-scm.com/download) - (Mac, Windows, or Linux)
+- [Git Bash](https://gitforwindows.org/) - If using Windows specifically, download Git Bash. Git is automatically installed with Git Bash
+- Download [Python 3.10+](https://www.python.org/downloads/)
+- Setup a free [Hugging Face account](https://huggingface.co/join)
+- Setup a free [Groq account](https://groq.com)
 
 Confirm that Git and Python are available:
 
@@ -152,35 +157,48 @@ git clone https://github.com/msai-631-hci-ai-org/clinical-mental-health-assistan
 git checkout feature/derrick-enhancements
 ```
 
-#### 3. Create a GROQ account and API KEY
+#### 3. Create a GROQ account and API KEY (For GROQ LPU/LLM)
 
-1. Sign in to GROQ.
+1. Sign in to [GROQ](https://groq.com).
 2. Open [Settings > Keys](https://console.groq.com/keys).
 3. Select **Create API KEY**.
 4. Give the Key a project-specific name such as `cmha`.
 5. Copy the Key when it is shown. Treat it like a password.
 6. If Key is missed, regenerate and keep for use.
 
-#### 4. For local testing, add the API KEY to `.env`
+#### 4 Create a Hugging Face account and TOKEN (For Hugging Face LLM model usage)
+1. Sign in to [Hugging Face](https://huggingface.co/join)
+2. Open [Settings > Access Token](https://huggingface.co/settings/tokens)
+3. Select **Create new TOKEN**
+4. Give the Token a specific name such as `hf-cmha`
+5. Copy the Token when it is shown. Treat it like a password.
+6. If the Token is missed, regenerate and keep for use.
+
+#### 5. For local testing, add the GROQ API KEY or HF TOKEN to `.env`
 
 In project workspace directory, create the local environment file:
 
 ```bash
+cd ./
 touch .env
 ```
 
 Replace the placeholder with the copied key:
 
 ```bash
-# Choose
+# BEST recommendation: if choosing to run with GROQ, setup GROQ_API_KEY as follows
 GROQ_API_KEY=your_actual_API_KEY
+
 or
+
+# FALLBACK usage: If choosing to run with local LLM, setup HF_TOKEN as follows
 HF_TOKEN=your_actual_TOKEN
-# MUST include
+
+# MUST include: HF_DEPLOYMENT handles local and deployment to hugging face environment execution
 HF_DEPLOYMENT=false #set to true for deployment #false for local testing
 ```
 
-#### 5. Build the RAG index
+#### 6. Build the RAG index
 
 The starter knowledge base is already under `data/`. Build its FAISS index:
 
@@ -190,7 +208,7 @@ python documents.py
 
 The first run downloads all .pdf, .md, and .txt files along side urls in code for injesting the model. Produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`)
 
-#### 6. Start the application
+#### 7. Start the application
 
 ```bash
 python app.py
