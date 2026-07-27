@@ -119,20 +119,14 @@ qa_chain = initialize_rag_pipeline()
 @spaces.GPU
 def generate_mental_health_response(user_query: str) -> str:
     # Level 3 Safety Check
-    # NOTE: The check_crisis_intent and CRISIS_RESPONSE are defined in PkCKLiEysMqg
-    # We need to make sure this is imported or accessible.
-    # For this example, let's assume it's imported or globally available.
-    # If not, you might need to add `from safety import check_crisis_intent, CRISIS_RESPONSE` here or similar.
     if check_crisis_intent(user_query):
         return CRISIS_RESPONSE
 
     try:
-        # Level 4 RAG Generation (updated invocation for new chain)
         response = qa_chain.invoke({"input": user_query})
         answer = response["answer"] # Output key is typically 'answer' now
 
-        # Optional: Append citations/sources for transparency (HCI benefit)
-        # Source documents are typically in 'context' key with the new chain
+        # Documents/citations/sources are appened for transparency
         sources = set([doc.metadata.get("source", "NIMH Guidelines") for doc in response["context"]])
         source_text = "\n\n---\n*Sources Consulted:* " + ", ".join(sources)
 
