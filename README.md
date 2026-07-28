@@ -10,17 +10,25 @@ knowledge base into a concise conversational agent that answers users questions 
 
 # Table of Contents
 1. [Team Members](#team)
-2. [Screenshots](#screenshots)
-3. [Implementated Requirements](#implemented-requirements)
-4. [Bot Architecture](#architecture)
-5. [Environment Setup/Testing](#run-locally)
-6. [Disclaimer](#disclaimer)
+2. [Project Overview](#project-overview)
+3. [The Problem](#the-problem)
+4. [Screenshots](#screenshots)
+5. [Implementated Requirements](#implemented-requirements)
+6. [Bot Architecture](#architecture)
+7. [Environment Setup/Testing](#run-locally-local-testing-purposes)
+8. [Disclaimer](#disclaimer)
 
 ## Team
 - Derrick Kyei
 - Kalirajan Natarajan
 - Obinna Asoluka
 - Stacey Scott
+
+## Project Overview
+The Clinical Mental Health Assistant Chatbot represents a "shift in agency" in Human-Computer Interaction (HCI). Rather than requiring users to search through complex, static databases like the WHO or NIMH archives, this AI-powered chat assistant synthesizes relevant information into an empathetic conversational interaction.The model retrieves data from a trusted vector store before generating a response to the user, the system ensures all answers are clinically anchored and minimizes the risk of AI hallucinations.
+
+## The Problem
+Global mental health is in crisis, with roughly one in eight people—over one billion individuals—live with a mental health condition. Despite this, median government spending on mental health is just two percent of health budgets, leading to significant treatment gaps. Standalone AI models often provide unreliable or fabricated medical advice. This chatbot addresses this by grounding its "brain" in verified public-domain resources.
 
 ## Screenshots
 
@@ -53,32 +61,44 @@ knowledge base into a concise conversational agent that answers users questions 
 
 ## Architecture
 
-### 1. Build Time / Setup Phase (Runs Once)
+### Project structure
 
-* **File:** `documents.py`
-* **When it runs:** **Manually executed ONCE** before launching or deploying the app (or executed locally before pushing to Hugging Face).
-* **What it does:** 
+```bash
+C-MHA/
+├── data/                    # Reviewed knowledge files and starter corpus
+├── src/
+│   ├── documents.py         # PDF/text/Markdown loading and chunking
+│   ├── rag.py               # End-to-end RAG coordination
+│   └── safety.py            # Model-independent crisis routing
+├── vector_db/               # Generated index
+├── app.py                   # Gradio application
+└── requirements.txt
+```
+
+### 1. Build Time / Setup Phase
+
+* **File:** `app.py`
+* **When `app.py` runs:** src.rag is imported, loaded, and `initialize_rag_pipeline()` is executed **once**, which loads modules and are cached.
 1. Reads all clinical .pdf, .md, or .txt documents from the `./data` folder.
 2. Generates vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`).
 3. Saves the persistent vector database to disk inside a folder named `./vector_db`.
-* **Deployment Note:** Once `documents.py` runs, it produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`). Commit and push `./vector_db` folder to Hugging Face Spaces alongside Python scripts. `documents.py` is meant to be ran once.  
+* **Note:** Once `initialize_rag_pipeline()` runs, it produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`). Commit and push `./vector_db` folder to GitHub/Hugging Face Spaces alongside Python scripts.
 
-
-### 2. Runtime / Execution Phase (Runs Continuously)
+### 2. Runtime / Execution Phase
 
 * **Files:** `app.py`, `rag.py`, and `safety.py`
-* **When they run:** `app.py` is Automatically started by Hugging Face Spaces (or for local testing run `app.py` as well) when the Space boots up, and continuously executed whenever a user sends a prompt.
+* **When `app.py` runs:** `app.py` is Automatically started both in Hugging Face Spaces or if locally ran for testing purposes.
 
 #### **How the Runtime Files Interact:**
 
-```
- Hugging Face Space Starts / User Accesses Web Interface
+```bash
+              User Accesses Web Interface
                            │
                            ▼
                        [app.py]
          Imports modules and builds Gradio UI
                            │
-  User types: "What are symptoms of anxiety?" & clicks Send
+  User types: "What are symptoms of anxiety?" & clicks Enter
                            │
                            ▼
                   [rag.py]
@@ -106,31 +126,7 @@ knowledge base into a concise conversational agent that answers users questions 
 
 ---
 
-### Summary of Deployment Steps
-
-1. **Locally:** Put .pdf, .md, or .txt in `./data`, run `python documents.py` creates `./vector_db`.
-2. **Push to Hugging Face Space:** Push `app.py`, `rag.py`, `safety.py`, `requirements.txt`, and the generated `./vector_db` folder to your Hugging Face Space repository.
-3. **Set Environment Variable:** In Hugging Face Space add `GROQ_API_KEY`.
-4. **Launch:** Hugging Face automatically runs `app.py`, making the full RAG chatbot live.
-
-The persisted FAISS binary is paired with JSON metadata rather than a Python
-pickle, avoiding unsafe pickle deserialization.
-
-## Project structure
-
-```bash
-C-MHA/
-├── data/                    # Reviewed knowledge files and starter corpus
-├── src/
-│   ├── documents.py         # PDF/text/Markdown loading and chunking
-│   ├── rag.py               # End-to-end RAG coordination
-│   └── safety.py            # Model-independent crisis routing
-├── vector_db/               # Generated index
-├── app.py                   # Gradio application
-└── requirements.txt
-```
-
-## Run locally
+## Run locally (Local Testing Purposes)
 
 Python 3.10 or newer is required. Python 3.10-3.12 is recommended for broad ML
 package compatibility.
@@ -198,21 +194,13 @@ HF_TOKEN=your_actual_TOKEN
 HF_DEPLOYMENT=false #set to true for deployment #false for local testing
 ```
 
-#### 6. Build the RAG index
-
-The starter knowledge base is already under `data/`. Build its FAISS index:
-
-```bash
-python documents.py
-```
-
-The first run downloads all .pdf, .md, and .txt files along side urls in code for injesting the model. Produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`)
-
-#### 7. Start the application
+#### 6. Start the application
 
 ```bash
 python app.py
 ```
+
+The first run downloads all .pdf, .md, and .txt files along side urls in code for injesting the model. Produces the `./vector_db` folder (containing files `index.faiss` and `index.pkl`) and caches modules.
 
 Open [http://127.0.0.1:7860](http://127.0.0.1:7860) in a browser. Keep the
 Terminal window open while using the application. Press `Ctrl+C` to stop it.
@@ -229,13 +217,13 @@ Terminal window open while using the application. Press `Ctrl+C` to stop it.
 
 ## Hugging Face Spaces deployment
 
-This repository is structured for a Gradio Hugging Face Space: `app.py` is the
+This repository is structured for a Gradio Hugging Face Spaces. `app.py` is the
 entry point and `requirements.txt` declares the runtime dependencies. Creating
 the shared Space, selecting its visibility, and approving its public release
 are team-owned deployment steps and are not claimed as completed by this
 feature branch.
 
-After the team collaborates changes, deployment steps to Hugging Face Spaces are as followed:
+After team collaborates changes, deployment steps to Hugging Face Spaces are as followed:
 
 1. Create a new Space with the **Gradio** SDK.
 2. Connect or upload this repository and select the intended branch.

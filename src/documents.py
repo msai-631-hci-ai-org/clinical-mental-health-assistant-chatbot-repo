@@ -52,13 +52,14 @@ def create_vector_db():
 
     # --- Add URL Loading ---
     print("Loading documents from URLs...")
-    # Replace with your desired URLs
+    # Replace with desired URLs
     urls = [
         "https://www.nimh.nih.gov/health/topics/anxiety-disorders",
         "https://www.nimh.nih.gov/health/topics/depression",
         "https://www.un.org/en/global-issues/mental-health",
         "https://www.nimh.nih.gov/health/find-help",
-        "https://www.apa.org/ptsd-guideline/patients-and-families/cognitive-behavioral"
+        "https://www.apa.org/ptsd-guideline/patients-and-families/cognitive-behavioral",
+        "https://www.cdc.gov/mental-health/living-with/index.html",
     ]
     web_loader = WebBaseLoader(urls)
     web_documents = web_loader.load()
@@ -89,6 +90,3 @@ def create_vector_db():
     vectorstore = FAISS.from_documents(chunks, embeddings)
     vectorstore.save_local(FAISS_SAVE_PATH)
     print(f"Success! FAISS index saved locally at '{FAISS_SAVE_PATH}'.")
-
-if __name__ == "__main__":
-    create_vector_db()

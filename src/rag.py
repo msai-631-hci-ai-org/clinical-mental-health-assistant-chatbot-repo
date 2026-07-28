@@ -19,12 +19,16 @@ from langchain_groq import ChatGroq
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
 from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 from src.safety import check_crisis_intent, CRISIS_RESPONSE
+from src.documents import create_vector_db
 from dotenv import load_dotenv
 load_dotenv() #load environment variables to use implicitly
 
 FAISS_SAVE_PATH = "./vector_db"
 
 def initialize_rag_pipeline():
+    # Checks vector_db existence and files/urls for injestion
+    create_vector_db()
+    
     llm = None
     # Retrieve Groq API Key 
     if 'GROQ_API_KEY' in os.environ:
@@ -114,11 +118,12 @@ def initialize_rag_pipeline():
 
     return qa_chain
 
-# Global Chain Instance
+# Global Chain Instance cached for further use
 qa_chain = initialize_rag_pipeline()
 @spaces.GPU
 def generate_mental_health_response(user_query: str) -> str:
     # Level 3 Safety Check
+    
     if check_crisis_intent(user_query):
         return CRISIS_RESPONSE
 

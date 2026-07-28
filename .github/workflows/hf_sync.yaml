@@ -1,3 +1,4 @@
+# Workflow handles syncing with hugging face spaces as updates are made
 name: Hugging Face Sync
 
 on:
