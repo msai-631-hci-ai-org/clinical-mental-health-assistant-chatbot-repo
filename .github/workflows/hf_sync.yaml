@@ -16,18 +16,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      # NEW STEP: Installs official Hugging Face Xet extension on the Ubuntu runner
+      # FIXED: Downloads the explicit x64 Linux binary directly into a global system folder
       - name: Install Git Xet extension
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://githubusercontent.com | sh
-          echo "/home/runner/.xet/bin" >> $GITHUB_PATH
-          echo "/home/runner/bin" >> $GITHUB_PATH
+          curl -L -o git-xet.tar.gz https://github.com
+          tar -xzf git-xet.tar.gz
+          sudo mv git-xet /usr/local/bin/
+          rm git-xet.tar.gz
+          
+          # Verify installation works before continuing
+          git xet --version
 
       - name: Push updates to Hugging Face (Excluding README)
         env:
           HF_TOKEN: ${{ secrets.HF_WORKFLOW_TOKEN }}
         run: |
-          # 1. Initialize Git Xet configuration on the runner
+          # 1. Initialize Git Xet configuration globally
           git xet install
           
           # 2. Configure local runner Git info
