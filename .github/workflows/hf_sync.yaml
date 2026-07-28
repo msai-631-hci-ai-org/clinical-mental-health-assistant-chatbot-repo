@@ -1,0 +1,45 @@
+# Workflow handles syncing with hugging face spaces as updates are made
+name: Hugging Face Sync
+
+on:
+  push:
+    branches:
+      - feature/derrick-enhancements
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: test-environment
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 1. Installs the standard Hugging Face Python software development kit
+      - name: Install Hugging Face Hub Client
+        run: pip install --upgrade huggingface_hub
+
+      # 2. Uses Python to seamlessly upload the files (Natively handles .faiss & .png binaries)
+      - name: Upload updates to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_WORKFLOW_TOKEN }}
+        run: |
+          python -c '
+          import os
+          from huggingface_hub import HfApi
+          
+          # Initialize the Hugging Face API connection
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          
+          print("Uploading files to Space...")
+          api.upload_folder(
+              folder_path=".",
+              repo_id="DerrickDK777/C-MHA-TEST",
+              repo_type="space",
+              # Explicitly tells Hugging Face to leave online README metadata untouched!
+              ignore_patterns=["README.md", ".git/**", ".github/**"]
+          )
+          print("Upload complete!")
+          '
