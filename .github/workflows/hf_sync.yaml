@@ -16,15 +16,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      # FIXED: Downloads the explicit x64 Linux binary directly into a global system folder
+      # FIXED: Uses standard system package tool (apt-get) to install git-xet cleanly
       - name: Install Git Xet extension
         run: |
-          curl -L -o git-xet.tar.gz https://github.com
-          tar -xzf git-xet.tar.gz
-          sudo mv git-xet /usr/local/bin/
-          rm git-xet.tar.gz
+          sudo apt-get update
+          sudo apt-get install -y curl unzip
           
-          # Verify installation works before continuing
+          # Download and run the setup cleanly using official Hugging Face script directly into standard bash
+          curl --proto '=https' --tlsv1.2 -sSf https://githubusercontent.com | bash
+          
+          # Move the compiled app directly to the global user space path so git can recognize it instantly
+          sudo mv $HOME/.xet/bin/git-xet /usr/local/bin/
+          
+          # Verify installation works before moving on
           git xet --version
 
       - name: Push updates to Hugging Face (Excluding README)
