@@ -16,44 +16,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      # FIXED: Uses standard system package tool (apt-get) to install git-xet cleanly
-      - name: Install Git Xet extension
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl unzip
-          
-          # Download and run the setup cleanly using official Hugging Face script directly into standard bash
-          curl --proto '=https' --tlsv1.2 -sSf https://githubusercontent.com | bash
-          
-          # Move the compiled app directly to the global user space path so git can recognize it instantly
-          sudo mv $HOME/.xet/bin/git-xet /usr/local/bin/
-          
-          # Verify installation works before moving on
-          git xet --version
+      # 1. Installs the standard Hugging Face Python software development kit
+      - name: Install Hugging Face Hub Client
+        run: pip install --upgrade huggingface_hub
 
-      - name: Push updates to Hugging Face (Excluding README)
+      # 2. Uses Python to seamlessly upload the files (Natively handles .faiss & .png binaries)
+      - name: Upload updates to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_WORKFLOW_TOKEN }}
         run: |
-          # 1. Initialize Git Xet configuration globally
-          git xet install
+          python -c '
+          import os
+          from huggingface_hub import HfApi
           
-          # 2. Configure local runner Git info
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
+          # Initialize the Hugging Face API connection
+          api = HfApi(token=os.environ["HF_TOKEN"])
           
-          # 3. Add Hugging Face as a remote repository destination
-          git remote add hf https://DerrickDK777:$HF_TOKEN@huggingface.co/spaces/DerrickDK777/C-MHA-TEST
-          
-          # 4. Fetch Hugging Face's history
-          git fetch hf main || true
-          
-          # 5. Overwrite local runner README with HF's version
-          git checkout hf/main -- README.md || echo "No remote README found to preserve"
-          
-          # 6. Re-stage everything so Git Xet intercepts the binary files correctly
-          git add -A
-          git commit -m "Keep Hugging Face README intact and prepare binaries [skip ci]" || echo "No changes to commit"
-          
-          # 7. Push safely (Git Xet handles the binary files automatically behind the scenes)
-          git push -f hf HEAD:main
+          print("Uploading files to Space...")
+          api.upload_folder(
+              folder_path=".",
+              repo_id="DerrickDK777/C-MHA-TEST",
+              repo_type="space",
+              # Explicitly tells Hugging Face to leave online README metadata untouched!
+              ignore_patterns=["README.md", ".git/**", ".github/**"]
+          )
+          print("Upload complete!")
+          '
