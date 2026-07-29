@@ -91,5 +91,5 @@ def create_vector_db():
     vectorstore.save_local(FAISS_SAVE_PATH)
     print(f"Success! FAISS index saved locally at '{FAISS_SAVE_PATH}'.")
 
-# if __name__ == "__main__":
-#     create_vector_db()
+if __name__ == "__main__":
+    create_vector_db()

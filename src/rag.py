@@ -24,7 +24,6 @@ from dotenv import load_dotenv
 load_dotenv() #load environment variables to use implicitly
 
 FAISS_SAVE_PATH = "./vector_db"
-create_vector_db()
 qa_chain = None #global declaration
 
 def initialize_rag_pipeline():
