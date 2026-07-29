@@ -152,7 +152,7 @@ python --version
 ```bash
 git clone https://github.com/msai-631-hci-ai-org/clinical-mental-health-assistant-chatbot-repo.git
 
-git checkout feature/derrick-enhancements
+git checkout main
 ```
 
 #### 3. Create a GROQ account and API KEY (For GROQ LPU/LLM)
@@ -265,5 +265,3 @@ C-MHA is an experimental educational prototype. In immediate danger, contact
 local emergency services or go to the nearest emergency department. In the
 U.S. and its territories, call or text 988 or visit
 [988lifeline.org](https://988lifeline.org/).
-
-Live
