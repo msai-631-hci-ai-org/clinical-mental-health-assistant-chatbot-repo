@@ -4,12 +4,12 @@ name: Hugging Face Sync
 on:
   push:
     branches:
-      - feature/derrick-enhancements
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: test-environment
+    environment: prod-environment
 
     steps:
       - name: Checkout repository code
@@ -36,7 +36,7 @@ jobs:
           print("Uploading files to Space...")
           api.upload_folder(
               folder_path=".",
-              repo_id="DerrickDK777/C-MHA-TEST",
+              repo_id="DerrickDK777/C-MHA",
               repo_type="space",
               # Explicitly tells Hugging Face to leave online README metadata untouched!
               ignore_patterns=["README.md", ".git/**", ".github/**"]
