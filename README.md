@@ -25,7 +25,7 @@ knowledge base into a concise conversational agent that answers users questions 
 - Stacey Scott
 
 ## Project Overview
-The Clinical Mental Health Assistant Chatbot represents a "shift in agency" in Human-Computer Interaction (HCI). Rather than requiring users to search through complex, static databases like the WHO or NIMH archives, this AI-powered chat assistant synthesizes relevant information into an empathetic conversational interaction.The model retrieves data from a trusted vector store before generating a response to the user, the system ensures all answers are clinically anchored and minimizes the risk of AI hallucinations.
+The Clinical Mental Health Assistant Chatbot represents a "shift in agency" in Human-Computer Interaction (HCI). Rather than requiring users to search through complex, static databases like the WHO or NIMH archives, this AI-powered chat assistant synthesizes relevant information into an empathetic conversational interaction. The model retrieves data from a trusted vector store before generating a response to the user, the system ensures all answers are clinically anchored and minimizes the risk of AI hallucinations.
 
 ## The Problem
 Global mental health is in crisis, with roughly one in eight people—over one billion individuals—live with a mental health condition. Despite this, median government spending on mental health is just two percent of health budgets, leading to significant treatment gaps. Standalone AI models often provide unreliable or fabricated medical advice. This chatbot addresses this by grounding its "brain" in verified public-domain resources.
@@ -39,6 +39,8 @@ Global mental health is in crisis, with roughly one in eight people—over one b
 ### Grounded answer with the retrieved source
 
 ![C-MHA grounded RAG answer](docs/images/c-mha-rag-answer.png)
+
+**Live App:** You can interact with C-MHA Live **[Click Here](https://derrickdk777-c-mha.hf.space/)**
 
 ## Implemented requirements
 
@@ -262,3 +264,5 @@ C-MHA is an experimental educational prototype. In immediate danger, contact
 local emergency services or go to the nearest emergency department. In the
 U.S. and its territories, call or text 988 or visit
 [988lifeline.org](https://988lifeline.org/).
+
+Live
