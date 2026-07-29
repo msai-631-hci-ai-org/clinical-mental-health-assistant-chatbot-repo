@@ -24,12 +24,10 @@ from dotenv import load_dotenv
 load_dotenv() #load environment variables to use implicitly
 
 FAISS_SAVE_PATH = "./vector_db"
+create_vector_db()
 qa_chain = None #global declaration
 
 def initialize_rag_pipeline():
-    # Checks vector_db existence and files/urls for injestion
-    create_vector_db()
-    
     llm = None
     # Retrieve Groq API Key 
     if 'GROQ_API_KEY' in os.environ:
