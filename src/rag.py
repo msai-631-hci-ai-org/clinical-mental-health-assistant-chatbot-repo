@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 load_dotenv() #load environment variables to use implicitly
 
 FAISS_SAVE_PATH = "./vector_db"
+qa_chain = None #global declaration
 
 def initialize_rag_pipeline():
     # Checks vector_db existence and files/urls for injestion
@@ -122,8 +123,8 @@ def initialize_rag_pipeline():
 qa_chain = initialize_rag_pipeline()
 @spaces.GPU
 def generate_mental_health_response(user_query: str) -> str:
+    global qa_chain
     # Level 3 Safety Check
-    
     if check_crisis_intent(user_query):
         return CRISIS_RESPONSE
 
