@@ -84,7 +84,7 @@ C-MHA/
 1. Reads all clinical .pdf, .md, or .txt documents from the `./data` folder.
 2. Generates vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`).
 3. Saves the persistent vector database to disk inside a folder named `./vector_db`.
-* **Note:** Once `initialize_rag_pipeline()` runs, it produces the `./vector_db` folder (containing files like `index.faiss` and `index.pkl`). Commit and push `./vector_db` folder to GitHub/Hugging Face Spaces alongside Python scripts.
+* **Note:** Once `initialize_rag_pipeline()` runs, it loads files from `./vector_db` folder (containing files like `index.faiss` and `index.pkl`). Commit and push `./vector_db` folder to GitHub/Hugging Face Spaces alongside Python scripts.
 
 ### 2. Runtime / Execution Phase
 
@@ -215,6 +215,7 @@ Terminal window open while using the application. Press `Ctrl+C` to stop it.
   `.env.txt` or `.env.example`, and that it is in the repository root beside `app.py`.
 - **`Port 7860` is already in use:** stop the older app process with `Ctrl+C`
   before launching another instance.
+- **.faiss and .pkl missing/reading error:** This typically affects HF deployment. In this case, `documents.py` will need to be executed first to ensure `vector_db` is created and indexed. Run `python documents.py` to create `index.pkl` and `index.faiss` as they need to be prebuilt before usage of chatbot.
 - **Cannot access gated repo:** an open-source model may be free to use, but in some cases, seeing an error like this is considered a "gated" model on Hugging Face. This means user will need to explicitly accept its terms of use (usually a license agreement) on the Hugging Face website and generate a `HF_TOKEN=your_actual_token` before download of the local LLM will occur before usage. `transformers` library will be able to authenticate and download the model correctly.
 
 ## Hugging Face Spaces deployment
