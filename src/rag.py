@@ -115,12 +115,11 @@ def initialize_rag_pipeline():
 
     # Build RAG Chain using create_stuff_documents_chain and create_retrieval_chain
     document_chain = create_stuff_documents_chain(llm, PROMPT)
-    qa_chain = create_retrieval_chain(retriever, document_chain)
+    return create_retrieval_chain(retriever, document_chain)
 
-    return qa_chain
-
-# Global Chain Instance cached for further use
-qa_chain = initialize_rag_pipeline()
+if qa_chain is None:
+    qa_chain = initialize_rag_pipeline()
+    
 @spaces.GPU
 def generate_mental_health_response(user_query: str) -> str:
     global qa_chain
