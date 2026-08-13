@@ -33,7 +33,7 @@ def initialize_rag_pipeline():
         # Initialize the Groq LLM
         llm = ChatGroq(
             api_key=os.environ['GROQ_API_KEY'],
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             temperature=0.2,
             max_retries=2
             )
