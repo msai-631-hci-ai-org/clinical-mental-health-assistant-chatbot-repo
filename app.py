@@ -24,7 +24,7 @@ def chat_function(message, history):
     return response
 
 # Build Gradio Interface
-with gr.Blocks(title="Clinical Mental Health Assistant", theme=gr.Theme.from_hub("VikramSingh178/Webui-Theme")) as demo:
+with gr.Blocks(title="Clinical Mental Health Assistant") as demo:
     gr.Markdown("# Clinical Mental Health Assistant (C-MHA)")
     gr.Markdown(DISCLAIMER)
     gr.Markdown(WELCOME)
@@ -46,4 +46,4 @@ with gr.Blocks(title="Clinical Mental Health Assistant", theme=gr.Theme.from_hub
 
 if __name__ == "__main__":
     # Runs locally or serves inside Hugging Face Spaces
-    demo.launch()
+    demo.launch(theme=gr.Theme.from_hub("VikramSingh178/Webui-Theme"))
