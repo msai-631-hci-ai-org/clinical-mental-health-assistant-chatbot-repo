@@ -55,7 +55,7 @@ def initialize_rag_pipeline():
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             quantization_config=bnb_config,
-            device_map="auto" # Automatically map model layers to GPU if available, else CPU
+            device_map="cpu" #  map model layers to CPU if available
         )
 
         pipe = pipeline(
@@ -117,7 +117,6 @@ def initialize_rag_pipeline():
 if qa_chain is None:
     qa_chain = initialize_rag_pipeline()
     
-@spaces.GPU(duration=1)
 def generate_mental_health_response(user_query: str) -> str:
     global qa_chain
     # Level 3 Safety Check
