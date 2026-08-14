@@ -117,7 +117,7 @@ def initialize_rag_pipeline():
 if qa_chain is None:
     qa_chain = initialize_rag_pipeline()
     
-@spaces.GPU
+@spaces.GPU(duration=1)
 def generate_mental_health_response(user_query: str) -> str:
     global qa_chain
     # Level 3 Safety Check
