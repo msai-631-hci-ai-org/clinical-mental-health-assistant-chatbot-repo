@@ -117,6 +117,13 @@ def initialize_rag_pipeline():
 if qa_chain is None:
     qa_chain = initialize_rag_pipeline()
     
+# Decorator for GPU support    
+@spaces.GPU(duration=1)
+def dummy_gpu_trigger():
+    """ This function is never called by the UI. 
+    Its only job is to stop the 'No @spaces.GPU function detected' error. """
+    return "ZeroGPU Activated"
+    
 def generate_mental_health_response(user_query: str) -> str:
     global qa_chain
     # Level 3 Safety Check
